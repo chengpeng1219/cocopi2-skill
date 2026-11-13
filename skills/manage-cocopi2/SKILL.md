@@ -21,7 +21,7 @@ user-invocable: true
 
 ## 边界与故障
 
-- USB 扫描依赖电脑上的 adb 可执行文件和设备授权。运行中的 adb server 只解决扫描，不保证 adb 命令可执行；`doctor` 失败时按提示安装 adb 或在**自己的终端**配置 `ADB_EXECUTABLE`，不能宣称只安装 Skill 就完成硬件驱动/授权。
+- USB 扫描可复用已运行的 adb server，但连接和终端命令仍需本机 adb 可执行文件。Windows 会检查 PATH 与相邻的 `pcsuite/adb_41`、`pcsuite/adb` 安装位置；`doctor` 显示实际找到的 adb。未找到时先让用户提供本机 adb 路径并配置 `ADB_EXECUTABLE`，不存在才提示安装；不能宣称 Skill 会完成驱动/设备授权。
 - Wi-Fi 需要可达的 TCP/22（或指定端口）、本机 SSH 密钥及已确认的 `known_hosts`；本技能不会跳过指纹检查，不接收密码。不提供 mDNS/局域网盲扫。
 - `run` 是单次非交互命令；后台任务用 `start`。后台程序使用设备 `/tmp/cocopi2-programs/`，设备重启/清理 `/tmp` 后文件与日志会丢失；停止操作只针对本工具记录的 id。
 - CocoPi 2 的 GPIO/灯/温度传感器没有抽象工具；`info` 仅运行 `uname -a`，不得声称已控制某个区的硬件。

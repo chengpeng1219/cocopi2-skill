@@ -82,9 +82,22 @@ async function adbShell(runner, adb, serial, command, timeoutMs) {
   }
 }
 
-// 常见的 adb 安装位置；仅在 PATH 与已运行的 adb server 都不可用时作为兜底。
-// Resolve adb from PATH or the explicit ADB_EXECUTABLE path; do not assume vendor software installed on another computer.
-const ADB_DEFAULT_LOCATIONS = [];
+// Some vendor apps put adb in a child directory of their PATH entry rather than
+// next to the executable named in PATH. Probe only those adjacent locations and
+// the OS standard Program Files directories; never assume the developer's drive.
+function adbFallbackLocations() {
+  if (process.platform !== 'win32') return [];
+  const roots = [process.env['ProgramFiles(x86)'], process.env.ProgramFiles,
+    ...(process.env.PATH ?? '').split(';').filter((item) => /(?:^|[\\/])pcsuite[\\/]?$/i.test(item.trim()))];
+  const locations = [];
+  for (const root of roots) {
+    if (typeof root !== 'string' || !root.trim()) continue;
+    const base = root.replace(/[\\/]+$/, '');
+    const vendor = /(?:^|[\\/])pcsuite$/i.test(base) ? base : `${base}\\pcsuite`;
+    for (const subdir of ['adb_41', 'adb']) locations.push(`${vendor}\\${subdir}\\adb.exe`);
+  }
+  return [...new Set(locations)];
+}
 
 async function listAdbDevices(adbSocket, listViaCommand, timeoutMs) {
   // 先复用已在运行的 adb server（别的应用可能已经启动它），失败再用命令行 adb。
@@ -492,7 +505,7 @@ export class DeviceManager {
   }
 
   async #adbExecutable(timeoutMs) {
-    const candidates = this.#adb === 'adb' ? [this.#adb, ...ADB_DEFAULT_LOCATIONS] : [this.#adb];
+    const candidates = this.#adb === 'adb' ? [this.#adb, ...adbFallbackLocations()] : [this.#adb];
     for (const candidate of candidates) {
       try {
         await this.#runner(candidate, ['version'], { timeout: timeoutMs, windowsHide: true, maxBuffer: 1024 * 1024 });

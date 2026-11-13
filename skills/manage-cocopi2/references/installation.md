@@ -19,5 +19,5 @@
 
 - Node.js 便携运行时取自 [nodejs.org v24.22.3](https://nodejs.org/dist/v24.22.3/)，可验证的哈希在 `runtime-manifest.json`，官方许可证见 `NODE-LICENSE.txt`；该包只是调用官方可执行文件，不会修改系统 Node 安装。
 - SSH 使用接收方操作系统自带或已安装的 `ssh` 命令、`BatchMode=yes` 和 `StrictHostKeyChecking=yes`。本包只内置 Node.js，不内置 OpenSSH；使用电脑已配置的密钥/agent，不处理口令输入。
-- ADB 使用环境变量 `ADB_EXECUTABLE`（指向可执行文件绝对路径），未设置时使用 PATH 中的 `adb`。便携包**不附带 adb**；ADB server (`127.0.0.1:5037`) 可用于扫描，但其他操作仍需 adb 可执行文件。第三方系统权限与设备授权不会因解压技能而自动授予。
+- ADB 优先使用环境变量 `ADB_EXECUTABLE`（指向可执行文件完整路径）；否则尝试 PATH 中的 `adb`，Windows 上还检查 PATH 内 `pcsuite` 目录的 `adb_41/adb.exe` 或 `adb/adb.exe` 与系统 Program Files 下的相邻目录。**不固定开发者的 D: 盘路径**。便携包不附带 adb；ADB server (`127.0.0.1:5037`) 可用于扫描，但连接、命令执行仍需 adb 可执行文件。执行 `<launcher> doctor` 可查看实际解析出的 adb 路径。第三方系统权限与设备授权不会因解压技能而自动授予。
 - 运行前确认当前目录和目标设备；改变当前目录会改用不同的 `.cocopi2/manager.json`。
