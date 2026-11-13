@@ -42,7 +42,7 @@ function commandFailure(error, executable, label, configuredPath) {
   if (error?.code === 'ENOENT') {
     const target = configuredPath && configuredPath !== executable ? configuredPath : executable;
     const installHint = executable === 'adb'
-      ? `未找到 ${target}。请安装 Android Platform Tools，或设置环境变量 ADB_EXECUTABLE 指向完整的 adb.exe 路径（例如 "D:\\Android\\platform-tools\\adb.exe"）。`
+      ? `未找到 ${target}。先检查 adb 是否已加入 PATH；Windows 上也会搜索 PATH 中 pcsuite 目录下的 adb_41/adb。若 adb 已安装在其他位置，请设置 ADB_EXECUTABLE 指向完整可执行文件路径；仅在电脑确实没有 adb 时才需安装 Android Platform Tools。`
       : `未找到 ${target}。请安装 OpenSSH 客户端，或将 ssh.exe 加入 PATH。`;
     return `${label}: executable "${target}" was not found. ${installHint}`;
   }
