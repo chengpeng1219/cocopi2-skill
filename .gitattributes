@@ -1,0 +1,7 @@
+# Keep Unix launcher runnable after Git checkout on Windows.
+*.sh text eol=lf
+*.mjs text eol=lf
+*.js text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.cmd text eol=crlf

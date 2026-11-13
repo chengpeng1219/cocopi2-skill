@@ -1,0 +1,22 @@
+# User-specific device state and credentials
+.cocopi2/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# Downloaded runtime binaries and generated release assets
+skills/manage-cocopi2/bin/win-*/
+skills/manage-cocopi2/bin/darwin-*/
+*.zip
+runtime-download/
+portable-smoke/
+
+# Temporary files
+.review/
+__pycache__/
+*.pyc
+.DS_Store

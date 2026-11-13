@@ -1,0 +1,23 @@
+# 安装和运行（Windows / macOS）
+
+1. 复制完整 `manage-cocopi2/` 目录（`SKILL.md`、`scripts/`、`references/`、`bin/`、`run.cmd`、`run.sh`）到支持 Agent Skills 的客户端技能目录，并重启/重新加载客户端。若客户端不支持 Agent Skills，仍可直接运行启动脚本，但不会自动触发技能。不同客户端的技能扫描目录以其自身文档为准。
+2. 使用系统对应的 `<launcher>`：Windows x64/arm64 用 `<skill-dir>\run.cmd`；macOS x64/arm64 用 `<skill-dir>/run.sh`。macOS 若解压后脚本没有执行位，运行 `chmod +x <skill-dir>/run.sh <skill-dir>/bin/<平台>/node`。不需要安装 Node.js、不改系统 PATH；Linux 不在此包的支持范围内。完整 ZIP 体积包含 4 份 Node.js 运行时；可仅保留接收方所在平台的 `bin/<平台>/node` 减小体积。
+3. 在项目工作目录运行：`<launcher> doctor`。它不会修改设备。USB 需 adb 和设备授权；Wi-Fi 需 OpenSSH、本机可用 SSH 密钥和正确的 known_hosts。失败输出不会自动安装依赖。
+4. USB 流程：`scan` → `connect-usb --serial <扫描结果 adbSerial>` → `devices` / `status --device <返回的 deviceId>`。
+5. Wi-Fi 流程：先在可信渠道核对设备 SSH 指纹并让电脑的 known_hosts 生效 → `connect-wifi --host <IP> --user <账户名> --port 22`。首次需要口令或密码时，先让用户在自己的终端完成 SSH 设置；本工具不采集密码。
+6. 要网页而非 CLI 时，在项目工作目录运行 `<launcher> web`，浏览器打开显示的 `http://127.0.0.1:8787/`。网页服务默认仅监听回环地址，且无认证；不要将其改为 `0.0.0.0`。这会启动前台服务，关掉终端会结束服务。
+
+## 状态文件
+
+默认路径：运行命令时的工作目录下 `.cocopi2/manager.json`。只保存设备连接元信息和程序登记信息；不会保存 SSH 私钥或账号密码。这个文件包含设备 IP/命令，避免上传到公共仓库；可将 `.cocopi2/` 加到 `.gitignore`。`--state <绝对路径>` 可指定另一个状态文件；不要把状态文件放进技能安装目录。CLI 调用均加载并保存该文件；删除文件后须重新扫描/连接，设备上此前启动的进程不会因此停止。
+
+## 输出和错误
+
+成功输出 JSON：`{"ok":true,"result":...}`；失败输出 JSON：`{"ok":false,"error":"..."}` 且退出码非 0。某些设备命令以 exitCode != 0 返回，但 CLI 本身能正常返回 JSON；检查结果内部的 `ok` 与 `stderr`。`run`、`start` 可以执行任意 shell 命令，应只运行用户明确要求的命令。
+
+## 可执行文件
+
+- Node.js 便携运行时取自 [nodejs.org v24.22.3](https://nodejs.org/dist/v24.22.3/)，可验证的哈希在 `runtime-manifest.json`，官方许可证见 `NODE-LICENSE.txt`；该包只是调用官方可执行文件，不会修改系统 Node 安装。
+- SSH 使用接收方操作系统自带或已安装的 `ssh` 命令、`BatchMode=yes` 和 `StrictHostKeyChecking=yes`。本包只内置 Node.js，不内置 OpenSSH；使用电脑已配置的密钥/agent，不处理口令输入。
+- ADB 使用环境变量 `ADB_EXECUTABLE`（指向可执行文件绝对路径），未设置时使用 PATH 中的 `adb`。便携包**不附带 adb**；ADB server (`127.0.0.1:5037`) 可用于扫描，但其他操作仍需 adb 可执行文件。第三方系统权限与设备授权不会因解压技能而自动授予。
+- 运行前确认当前目录和目标设备；改变当前目录会改用不同的 `.cocopi2/manager.json`。

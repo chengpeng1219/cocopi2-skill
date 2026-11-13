@@ -1,0 +1,1 @@
+此目录用于便携包内的官方 Node.js 运行时（v24.22.3）。每个平台只含 `node` 或 `node.exe`；不包含 npm，不修改系统 PATH。验证清单见 `references/runtime-manifest.json`。
