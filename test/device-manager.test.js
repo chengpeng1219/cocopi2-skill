@@ -27,6 +27,21 @@ test('Wi-Fi SSH username is applied to connect and status checks', async () => {
   assert.ok(calls[1].includes('root@cocopi.local'));
 });
 
+test('Wi-Fi connect passes password to Python SSH bridge over stdin, never argv', async () => {
+  const calls = [];
+  const manager = new DeviceManager({ sshPassword: 'test-only-secret', strictHostKeyChecking: false, allowNewHostKeys: true, runner: async (exe, args, options) => {
+    calls.push({ exe, args, options });
+    return { stdout: '', stderr: '' };
+  } });
+  const device = await manager.connectDevice({ transport: 'wifi', host: '192.0.2.5', username: 'root' });
+  assert.equal(device.state, 'connected');
+  assert.equal(calls[0].exe, process.env.COCOPI2_PYTHON ?? 'python');
+  assert.match(calls[0].args[0], /ssh_password_bridge\.py$/);
+  assert.ok(!calls[0].args.join(' ').includes('test-only-secret'));
+  assert.deepEqual(calls[0].options.input, Buffer.concat([Buffer.from('16\n'), Buffer.from('test-only-secret')]));
+  assert.ok(calls[0].args.includes('false'));
+});
+
 test('Wi-Fi connect uses batch SSH, known hosts, and the selected port', async () => {
   let argsSeen;
   const manager = new DeviceManager({ runner: async (exe, args) => { assert.equal(exe, 'ssh'); argsSeen = args; return { stdout: '' }; }, now: fixedNow });

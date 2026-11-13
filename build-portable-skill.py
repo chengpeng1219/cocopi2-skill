@@ -21,7 +21,7 @@ with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compressleve
         if not item.is_file():
             continue
         name = (Path(skill.name) / item.relative_to(skill)).as_posix()
-        if name.startswith("manage-cocopi2/bin/") and name.endswith("/node") or name == "manage-cocopi2/run.sh":
+        if name.startswith("manage-cocopi2/bin/") and name.endswith("/node") or name in {"manage-cocopi2/run.sh", "manage-cocopi2/run-web.sh"}:
             mode = 0o100755
         else:
             mode = 0o100644

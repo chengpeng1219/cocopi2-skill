@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { connect as connectSocket } from 'node:net';
+import { fileURLToPath } from 'node:url';
 import {
   validProgramName,
   validProgramCommand,
@@ -234,13 +235,34 @@ export class DeviceManager {
   #now;
   #adb;
   #adbSocket;
+  #sshPassword;
+  #strictHostKeyChecking;
+  #allowNewHostKeys;
+  #reconfigureSsh;
 
-  constructor({ runner = execFileAsync, now = () => new Date(), adbExecutable = process.env.ADB_EXECUTABLE ?? 'adb', adbSocketTransport } = {}) {
+  constructor({ runner = execFileAsync, now = () => new Date(), adbExecutable = process.env.ADB_EXECUTABLE ?? 'adb', adbSocketTransport, sshPassword = process.env.COCOPI2_SSH_PASSWORD ?? '', strictHostKeyChecking = process.env.COCOPI2_SSH_STRICT_HOST_KEY_CHECKING !== 'false', allowNewHostKeys = process.env.COCOPI2_SSH_STRICT_HOST_KEY_CHECKING === 'false' } = {}) {
     this.#runner = runner;
     this.#now = now;
     this.#adbSocket = adbSocketTransport ?? defaultAdbSocket;
     if (typeof adbExecutable !== 'string' || !adbExecutable.trim()) throw new TypeError('adbExecutable must be a non-empty path or command name');
     this.#adb = adbExecutable.trim();
+    if (typeof sshPassword !== 'string') throw new TypeError('sshPassword must be a string');
+    if (typeof strictHostKeyChecking !== 'boolean') throw new TypeError('strictHostKeyChecking must be boolean');
+    if (typeof allowNewHostKeys !== 'boolean') throw new TypeError('allowNewHostKeys must be boolean');
+    this.#sshPassword = sshPassword;
+    this.#strictHostKeyChecking = strictHostKeyChecking;
+    this.#allowNewHostKeys = allowNewHostKeys;
+    this.#reconfigureSsh = ({ sshPassword, strictHostKeyChecking, allowNewHostKeys }) => {
+      if (typeof sshPassword !== 'string') throw new TypeError('sshPassword must be a string');
+      if (typeof strictHostKeyChecking !== 'boolean' || typeof allowNewHostKeys !== 'boolean') throw new TypeError('invalid SSH host-key configuration');
+      this.#sshPassword = sshPassword;
+      this.#strictHostKeyChecking = strictHostKeyChecking;
+      this.#allowNewHostKeys = allowNewHostKeys;
+    };
+  }
+
+  updateSshSettings({ sshPassword, strictHostKeyChecking, allowNewHostKeys } = {}) {
+    this.#reconfigureSsh({ sshPassword, strictHostKeyChecking, allowNewHostKeys });
   }
 
   listDevices({ transport, state } = {}) {
@@ -248,6 +270,26 @@ export class DeviceManager {
       .filter((device) => !transport || device.transport === transport)
       .filter((device) => !state || device.state === state)
       .map((device) => ({ ...device }));
+  }
+
+  #sshCommandArgs(host, username, port, timeoutMs, command) {
+    const args = ['-o', 'BatchMode=yes'];
+    if (!this.#strictHostKeyChecking) args.push('-o', 'StrictHostKeyChecking=no');
+    else if (this.#allowNewHostKeys) args.push('-o', 'StrictHostKeyChecking=accept-new');
+    else args.push('-o', 'StrictHostKeyChecking=yes');
+    args.push('-o', `ConnectTimeout=${Math.max(1, Math.ceil(timeoutMs / 1000))}`, '-p', String(port), sshTarget(host, username), command);
+    return args;
+  }
+
+  #sshCommand(host, username, port, timeoutMs, command) {
+    const args = this.#sshCommandArgs(host, username, port, timeoutMs, command);
+    if (!this.#sshPassword) return this.#runner('ssh', args, { timeout: timeoutMs, windowsHide: true, maxBuffer: 8 * 1024 * 1024 });
+    const script = fileURLToPath(new URL('./ssh_password_bridge.py', import.meta.url));
+    const python = process.env.COCOPI2_PYTHON ?? 'python';
+    const knownHosts = this.#strictHostKeyChecking || this.#allowNewHostKeys ? (process.env.USERPROFILE ? `${process.env.USERPROFILE}\\.ssh\\known_hosts` : `${process.env.HOME}/.ssh/known_hosts`) : '-';
+    const bridgeArgs = [script, host, username, String(port), Buffer.from(command, 'utf8').toString('base64'), String(Math.max(1, Math.ceil(timeoutMs / 1000))), String(this.#strictHostKeyChecking), knownHosts];
+    const passwordBytes = Buffer.from(this.#sshPassword, 'utf8');
+    return this.#runner(python, bridgeArgs, { timeout: timeoutMs + 1500, windowsHide: true, maxBuffer: 8 * 1024 * 1024, input: Buffer.concat([Buffer.from(`${passwordBytes.length}\n`, 'ascii'), passwordBytes]) });
   }
 
   async discoverDevices({ transports = ['usb'], hosts = [], username, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
@@ -297,7 +339,7 @@ export class DeviceManager {
       if (typeof host !== 'string' || !host.trim() || /[\s;&|`$<>]/.test(host)) throw new TypeError('host must be a hostname or IP address');
       if (!Number.isInteger(port) || port < 1 || port > 65535) throw new TypeError('port must be between 1 and 65535');
       try {
-        const result = await this.#runner('ssh', ['-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o',`ConnectTimeout=${Math.max(1, Math.ceil(timeoutMs / 1000))}`,'-p',String(port),sshTarget(host, username),'true'], { timeout: timeoutMs, windowsHide: true, maxBuffer: 1024 * 1024 });
+        const result = await this.#sshCommand(host, username, port, timeoutMs, 'true');
         if (result.code !== undefined && result.code !== 0) throw new Error(`ssh exited with code ${result.code}`);
       } catch (error) {
         throw new Error(commandFailure(error, 'ssh', 'SSH connection failed'), { cause: error });
@@ -334,7 +376,7 @@ export class DeviceManager {
     const device = this.#requireDevice(deviceId);
     try {
       if (device.transport === 'wifi') {
-        await this.#runner('ssh', ['-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o',`ConnectTimeout=${Math.max(1, Math.ceil(timeoutMs / 1000))}`,'-p',String(device.port ?? 22),sshTarget(device.host, device.username),'true'], { timeout: timeoutMs, windowsHide: true, maxBuffer: 1024 * 1024 });
+        await this.#sshCommand(device.host, device.username, device.port ?? 22, timeoutMs, 'true');
       } else {
         await this.#runner(await this.#adbExecutable(timeoutMs), ['-s', device.adbSerial, 'get-state'], { timeout: timeoutMs, windowsHide: true, maxBuffer: 1024 * 1024 });
       }
@@ -350,12 +392,11 @@ export class DeviceManager {
   async getDeviceInfo({ deviceId, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
     validTimeout(timeoutMs);
     const device = this.#requireDevice(deviceId);
-    const args = device.transport === 'wifi'
-      ? ['-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o',`ConnectTimeout=${Math.max(1, Math.ceil(timeoutMs / 1000))}`,'-p',String(device.port ?? 22),sshTarget(device.host, device.username),'uname -a']
-      : ['-s', device.adbSerial, 'shell', 'uname -a'];
     const executable = device.transport === 'wifi' ? 'ssh' : 'adb';
     try {
-      const result = await this.#runner(executable === 'adb' ? await this.#adbExecutable(timeoutMs) : executable, args, { timeout: timeoutMs, windowsHide: true, maxBuffer: 1024 * 1024 });
+      const result = device.transport === 'wifi'
+        ? await this.#sshCommand(device.host, device.username, device.port ?? 22, timeoutMs, 'uname -a')
+        : await this.#runner(await this.#adbExecutable(timeoutMs), ['-s', device.adbSerial, 'shell', 'uname -a'], { timeout: timeoutMs, windowsHide: true, maxBuffer: 1024 * 1024 });
       return { deviceId, transport: device.transport, endpoint: device.endpoint, os: (result.stdout ?? '').trim() };
     } catch (error) {
       throw new Error(commandFailure(error, executable, 'Could not read device info', executable === 'adb' ? this.#adb : undefined), { cause: error });
@@ -384,7 +425,7 @@ export class DeviceManager {
     }
 
     try {
-      const result = await this.#runner('ssh', ['-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o',`ConnectTimeout=${Math.max(1, Math.ceil(timeoutMs / 1000))}`,'-p',String(device.port ?? 22),sshTarget(device.host, device.username),text], { timeout: timeoutMs, windowsHide: true, maxBuffer: 8 * 1024 * 1024 });
+      const result = await this.#sshCommand(device.host, device.username, device.port ?? 22, timeoutMs, text);
       return { ...commandResult(base, { ok: true, exitCode: 0, stdout: result.stdout, stderr: result.stderr }), finishedAt: this.#now().toISOString() };
     } catch (error) {
       const exitCode = error.code === 'ENOENT' || error.code === 'ETIMEDOUT' ? null : (typeof error.code === 'number' ? error.code : null);

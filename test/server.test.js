@@ -28,6 +28,8 @@ test('root shows web device management dashboard', async (t) => {
   assert.match(html, /wifiForm/);
   assert.match(html, /scanUsb/);
   assert.match(html, /test_ssh/);
+  assert.match(html, /id="sshPassword"/);
+  assert.match(html, /id="saveSshSettings"/);
   assert.deepEqual(await (await fetch(`${url}/health`)).json(), { status: 'ok' });
 });
 
@@ -77,6 +79,18 @@ test('program endpoints validate input before touching a device', async (t) => {
   assert.equal((await post('/tools/stop_program', { deviceId: 'nope', programId: '../../etc' })).status, 400);
   assert.equal((await post('/tools/program_log', { deviceId: 'nope', programId: 'abc', lines: 0 })).status, 502);
   assert.equal((await post('/tools/start_program', { deviceId: 'nope', name: 'x', command: 'ls' })).status, 502);
+});
+
+test('SSH password is rejected in HTTP body and must come from process environment', async (t) => {
+  const { child, url } = await startServer();
+  t.after(() => child.kill());
+  const response = await fetch(`${url}/tools/test_ssh`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ host: '127.0.0.1', username: 'root', password: 'do-not-accept' }),
+  });
+  assert.equal(response.status, 400);
+  assert.match((await response.json()).error, /Do not send SSH passwords/);
 });
 
 test('SSH diagnostic endpoint returns structured error rather than an opaque 502', async (t) => {

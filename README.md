@@ -2,6 +2,10 @@
 
 本仓库包含可在本机通过 SSH/ADB 连接 CocoPi 2 的设备管理服务，以及可供 Agent Skills 客户端加载的 [manage-cocopi2 技能](<skills/manage-cocopi2/SKILL.md>)。它支持设备扫描/连接、Linux 命令、后台程序与日志管理；不提供 GPIO/传感器等特定硬件控制。源码以 [MIT 许可证](<LICENSE>)发布；随包的 Node.js 有独立的[官方许可证](<skills/manage-cocopi2/references/NODE-LICENSE.txt>)。
 
+## Wi-Fi 密码网页模式
+
+只在网页服务运行的本机浏览器中使用密码连接时，可启动 `run-web.ps1`。该脚本将加密密钥保存在当前 Windows 用户的 `%LOCALAPPDATA%\\CocoPi2DeviceManager\\secret.key`，密码密文保存在同目录的 `ssh-password.json`；服务拒绝监听非回环地址。首次运行在网页中填入共享设备密码并点“保存本机设置”；每台新设备首次连接会自动接受并记录 SSH 主机指纹，后续同 IP 指纹变化仍拒绝。此功能使用系统 Python 3 与 Paramiko 5.x，运行前需自行安装 `python -m pip install "paramiko>=5,<6"`；Paramiko 按 LGPL-2.1 分发且不随 ZIP 打包。不要把生成的密钥/密码文件提交到仓库或公开。
+
 ## 对外分发
 
 Windows/macOS 的便携 ZIP 发布在 GitHub Releases（发布步骤见 [PUBLISHING.md](<PUBLISHING.md>)）；仓库本身不提交各平台 Node.js 二进制，也不提交任何设备凭据/状态。下载 ZIP 后校验 Release 公告的 SHA256，完整解压 `manage-cocopi2/` 到客户端支持的技能目录并重新加载客户端。**把 GitHub 链接直接发到 CocoBuddy 聊天里自动安装尚未实现**；首次执行需要用户确认设备连接授权。USB 需要系统可用 adb，Wi-Fi 需要已配置 SSH 密钥与主机指纹。
