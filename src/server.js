@@ -81,7 +81,6 @@ const server = createServer(async (request, response) => {
     }
     const params = body ? JSON.parse(body) : {};
     if (typeof params.password !== 'undefined') throw new TypeError('Do not send SSH passwords in HTTP requests; use the local settings panel.');
-    
     if (request.url === '/local-settings' && !Object.hasOwn(params, 'sshPassword')) return send(405, { error: 'method_not_allowed' });
     if (request.url === '/local-settings') {
       if (typeof params.sshPassword !== 'string' || params.sshPassword.length > 256) throw new TypeError('sshPassword must be a string up to 256 characters');
